@@ -127,14 +127,17 @@
 **目标**：完整多租户 schema 落地，迁移体系可用
 
 **任务**：
-- [ ] SQLAlchemy 2.0 async 模型：第 4 节全部表
-- [ ] Alembic 迁移：初始迁移 + 迁移可重放验证
-- [ ] 多租户约束：外键 + 复合索引（tenant_id 前缀）+ 唯一约束（如 tenant 内 kb 名唯一）
-- [ ] 种子脚本：创建默认租户（本公司）+ admin 用户 + 示例知识库
-- [ ] Qdrant collection 初始化脚本（向量维度对齐 BGE-M3 = 1024，payload 索引：tenant_id/kb_id/expire_date）
-- [ ] 基础 CRUD repository 层 + 单元测试
+- [x] SQLAlchemy 2.0 async 模型：第 4 节全部表
+- [x] Alembic 迁移：初始迁移 + 迁移可重放验证
+- [x] 多租户约束：外键 + 复合索引（tenant_id 前缀）+ 唯一约束（如 tenant 内 kb 名唯一）
+- [x] 种子脚本：创建默认租户（本公司）+ admin 用户 + 示例知识库
+- [x] Qdrant collection 初始化脚本（向量维度对齐 BGE-M3 = 1024，payload 索引：tenant_id/kb_id/expire_date）
+- [x] 基础 CRUD repository 层 + 单元测试
+- [x] （决策后追加）PG RLS 行级安全：非超级用户应用角色 + 8 表策略（默认拒绝 + 公共库只读）
 
-**验收**：`alembic upgrade head` / `downgrade base` 可重放；种子数据可查；跨租户查询在 repository 层被 tenant_id 强制过滤（有测试覆盖）
+**验收**：`alembic upgrade head` / `downgrade base` 可重放；种子数据可查；跨租户查询在 repository 层被 tenant_id 强制过滤（有测试覆盖）→ **✅ 已通过（2026-07-23，11 项测试详见 test.md）**
+
+**已冻结决策**：公共政策库 v1 就建（is_public）；应用层+RLS 双保险；软删除；角色 admin/member
 
 **风险**：schema 后期变更成本高 → 本 milestone 结束前与负责人过一遍字段清单再冻结
 
@@ -288,4 +291,5 @@
 
 | 日期 | Milestone | 工作总结 | 测试结论 | Commit |
 |---|---|---|---|---|
+| 2026-07-23 | M1 | 数据库落地：9 表 schema（财税元数据+软删除+公共库）、Alembic 迁移、RLS 双保险（非超级用户角色+默认拒绝策略）、repository 层、种子、Qdrant collection | 11/11 通过（迁移可重放、repo/RLS 双层隔离、软删除、种子幂等、Qdrant 索引核验；1 处测试断言错误排查后修正） | feat(M1) |
 | 2026-07-22 | M0 | 项目骨架落地：uv workspace（api/worker/core 三包）、docker-compose 四服务、pydantic-settings 配置、/healthz、ruff+pytest | 6/6 通过（lint、单测、四容器 healthy、healthz 端到端、配置加载） | feat(M0) |

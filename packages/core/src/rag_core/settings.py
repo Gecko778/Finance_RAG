@@ -9,7 +9,12 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # --- PostgreSQL（业务库） ---
+    # 应用连接：非超级用户 finance_rag_app（由迁移创建），受 RLS 约束
     database_url: str = (
+        "postgresql+asyncpg://finance_rag_app:finance_rag_app_dev@localhost:5432/finance_rag"
+    )
+    # 管理连接：仅用于迁移/种子脚本（compose 的超级用户，绕过 RLS）
+    database_admin_url: str = (
         "postgresql+asyncpg://finance_rag:finance_rag_dev@localhost:5432/finance_rag"
     )
 
