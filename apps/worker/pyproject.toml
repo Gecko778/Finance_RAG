@@ -1,9 +1,12 @@
 [project]
 name = "rag-worker"
 version = "0.1.0"
-description = "财税 RAG 平台摄取 worker（arq 于 M2 引入）"
+description = "财税 RAG 平台摄取 worker"
 requires-python = ">=3.11"
 dependencies = [
+    "arq>=0.26",
+    "pypdf>=5.1",
+    "python-docx>=1.1",
     "rag-core",
 ]
 

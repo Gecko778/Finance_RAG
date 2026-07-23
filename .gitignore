@@ -22,3 +22,7 @@ htmlcov/
 .idea/
 .vscode/
 .DS_Store
+
+# 本地测试文档（真实政策文件不入库）
+testdata/*
+!testdata/.gitkeep

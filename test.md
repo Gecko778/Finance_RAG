@@ -4,7 +4,25 @@
 
 ---
 
-## 2026-07-23 · M1 数据库
+## 2026-07-23 · M2 摄取管线（部分验收，ready 路径待补）
+
+| # | 测试项 | 执行命令 | 预期 | 实际 | 结论 |
+|---|---|---|---|---|---|
+| 1 | Lint | `uv run ruff check .` | 0 错误 | 首轮 8 处（5 自动修复；FastAPI Form 默认值 B008 误报加白名单；1 处手工换行）→ 0 | ✅（修复后） |
+| 2 | 切块单测 | pytest `test_chunking.py`（4 项） | 条款切分/元数据头/重叠/回退全对 | 通过 | ✅ |
+| 3 | 解析器单测 | pytest `test_parsers.py`（6 项：txt utf8/gbk、md、docx 段落+表格、不支持格式、空结果） | 全对 | 通过 | ✅ |
+| 4 | 全套回归 | `uv run pytest -q` | 全过 | `16 passed` | ✅ |
+| 5 | 上传 API 端到端 | curl POST 上传 txt（带 X-Tenant-Id + doc_number 表单） | 201 + status=uploaded | 返回文档 JSON，status=uploaded | ✅ |
+| 6 | MinIO 落盘 | `mc ls` 桶内路径 | 对象存在于 tenant/{doc_id}/ 路径 | 239B 对象在正确路径 | ✅ |
+| 7 | 状态机失败路径 | 无 API Key 上传→worker 消费 | 走到 embedding 后 failed + 明确错误 | **首轮 bug**：状态卡 embedding 永不回写（见下）→ 修复后 status=failed, error="SILICONFLOW_API_KEY 未配置" | ✅（修复后） |
+| 8 | 删除级联清理 | DELETE 文档 → 查 MinIO/PG/API | 204；MinIO 对象删除；GET 404；PG 记录保留+deleted_at | 全部符合 | ✅ |
+| 9 | **ready 路径端到端** | 上传真实政策 PDF/DOCX → ready → Qdrant 可查 | — | **待补**：需 SILICONFLOW_API_KEY（用户填 .env）+ 真实文档（用户放 testdata/） | ⏳ 待补测 |
+
+**过程中发现并修复的问题**：
+1. **arq 重试机制理解错误（#7 首轮失败，真 bug）**：arq 对普通异常不自动重试（仅显式 `Retry` 才重试），原代码 `job_try>=3 才回写 failed` 的条件永远不满足，文档状态卡死在 embedding。实测日志确认单次失败即终结后，修正为：任务级不重试、异常即回写 failed（临时故障已由 embedding HTTP 层 3 次重试覆盖）。重新实测：failed 状态与错误信息正确回写
+2. FastAPI `Form()` 默认值触发 ruff B008 误报 → flake8-bugbear extend-immutable-calls 白名单
+
+**M2 验收结论**：管线代码与失败路径、删除级联全部实测通过；**ready 路径（真实向量化入 Qdrant）待用户提供 API Key 与真实文档后补验，届时补录 #9**。
 
 | # | 测试项 | 执行命令 | 预期 | 实际 | 结论 |
 |---|---|---|---|---|---|

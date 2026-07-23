@@ -148,15 +148,16 @@
 **目标**：上传文档 → 自动解析切块向量化 → 可检索
 
 **任务**：
-- [ ] 上传 API：多格式（PDF/DOCX/TXT/MD）→ MinIO，创建 document 记录（含财税元数据表单字段）
-- [ ] arq worker：解析（pypdf/python-docx/unstructured）→ 清洗 → 切块 → 向量化（SiliconFlow BGE-M3，批量+重试）→ 写入 Qdrant + chunks 表
-- [ ] 财税切块策略：政策法规按条款边界切块（正则识别"第 X 条"），普通文档按语义段落 + overlap；块内附加元数据头（文号/标题）
-- [ ] 状态机流转 + 失败重试 + 错误信息回写；文档删除时级联清理 Qdrant points/MinIO/chunks
-- [ ] 摄取进度查询 API
+- [x] 上传 API：多格式（PDF/DOCX/TXT/MD）→ MinIO，创建 document 记录（含财税元数据表单字段）
+- [x] arq worker：解析（pypdf/python-docx，经用户确认精简掉 unstructured）→ 切块 → 向量化（SiliconFlow BGE-M3，批量+重试）→ 写入 Qdrant + chunks 表
+- [x] 财税切块策略：政策法规按条款边界切块（正则识别"第 X 条"），普通文档按语义段落 + overlap；块内附加元数据头（文号/标题）
+- [x] 状态机流转 + 失败回写（任务级不重试，HTTP 层重试覆盖临时故障——实测修正了 arq 重试假设）；文档删除时级联清理 Qdrant points/MinIO/chunks
+- [x] 摄取进度查询 API
+- [ ] **ready 路径端到端验收**：待 SILICONFLOW_API_KEY（用户填 .env）+ 真实政策文档（用户放 testdata/）
 
-**验收**：上传一份真实财税政策 PDF 和一份 DOCX，状态流转到 ready；Qdrant 中可按 tenant_id+kb_id 过滤查到向量；删除文档后三处数据（PG/Qdrant/MinIO）均清理
+**验收**：上传一份真实财税政策 PDF 和一份 DOCX，状态流转到 ready；Qdrant 中可按 tenant_id+kb_id 过滤查到向量；删除文档后三处数据（PG/Qdrant/MinIO）均清理 → **⏳ 部分通过（2026-07-23）：失败路径/MinIO/删除级联 8 项实测通过；ready 路径待 Key+文档后补验（test.md #9）**
 
-**风险**：**表格类财税 PDF 解析质量**是本项目最大技术风险 → 验收时用真实政策附表测试，若 unstructured 效果不足，触发 MinerU 升级评估（与负责人确认后再引入）
+**风险**：**表格类财税 PDF 解析质量**是本项目最大技术风险 → 验收时用真实政策附表测试，若解析效果不足，触发 MinerU 升级评估（与负责人确认后再引入）
 
 ---
 
@@ -291,5 +292,6 @@
 
 | 日期 | Milestone | 工作总结 | 测试结论 | Commit |
 |---|---|---|---|---|
+| 2026-07-23 | M2 | 摄取管线落地：上传 API（元数据表单+校验）、MinIO/Qdrant 客户端、条款切块策略、SiliconFlow 批量向量化、arq worker 状态机、删除级联清理 | 8/9 通过（单测 16、上传/MinIO/失败路径/删除级联实测；修复 arq 重试假设错误的真 bug）；ready 路径待 Key+真实文档补验 | feat(M2) |
 | 2026-07-23 | M1 | 数据库落地：9 表 schema（财税元数据+软删除+公共库）、Alembic 迁移、RLS 双保险（非超级用户角色+默认拒绝策略）、repository 层、种子、Qdrant collection | 11/11 通过（迁移可重放、repo/RLS 双层隔离、软删除、种子幂等、Qdrant 索引核验；1 处测试断言错误排查后修正） | feat(M1) |
 | 2026-07-22 | M0 | 项目骨架落地：uv workspace（api/worker/core 三包）、docker-compose 四服务、pydantic-settings 配置、/healthz、ruff+pytest | 6/6 通过（lint、单测、四容器 healthy、healthz 端到端、配置加载） | feat(M0) |

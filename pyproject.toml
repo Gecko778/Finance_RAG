@@ -20,6 +20,10 @@ select = ["E", "F", "I", "UP", "B"]
 # alembic 自动生成的迁移文件不做行宽约束
 "alembic/versions/*" = ["E501"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 惯用法：参数默认值调用这些工厂函数是官方写法，非 bug
+extend-immutable-calls = ["fastapi.Form", "fastapi.Depends", "fastapi.Header", "fastapi.Query"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["apps", "packages"]

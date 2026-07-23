@@ -4,7 +4,28 @@
 
 ---
 
-## 2026-07-23 · M1 数据库 ✅
+## 2026-07-23 · M2 摄取管线 ⏳（代码完成，端到端 ready 路径待 API Key + 真实文档后补验）
+
+**设计决策（用户确认后冻结）**：SiliconFlow Key 用户稍后填 .env；测试文档用户提供（放 `testdata/`）；解析器精简为 pypdf+python-docx（放弃 unstructured，表格差时走既定 MinerU 评估）。
+
+**本次生成的文件/模块**：
+
+| 文件 | 作用 |
+|---|---|
+| `packages/core/src/rag_core/storage.py` | MinIO 存取删（bucket 自动创建） |
+| `packages/core/src/rag_core/vectors.py` | Qdrant 异步读写：upsert_chunks / delete_by_doc / count_by_doc |
+| `packages/core/src/rag_core/ingestion/chunking.py` | 切块策略：政策按「第X条」条款切（≥3 条触发），超长条款段落细分；普通文档段落聚合 800 字符 + 120 字符重叠；块头注入【文号 标题】 |
+| `packages/core/src/rag_core/ingestion/embeddings.py` | SiliconFlow 批量向量化（批 32，429/5xx 指数退避重试 3 次） |
+| `apps/worker/src/rag_worker/parsers.py` | PDF/DOCX/TXT/MD 解析（docx 含表格行；txt gbk 回退；空结果显式报错提示扫描件） |
+| `apps/worker/src/rag_worker/main.py` | arq 任务 ingest_document：状态机 parsing→chunking→embedding→ready，失败回写 failed+error_msg，重跑幂等（先清旧数据） |
+| `apps/api/src/rag_api/deps.py` | 租户头（X-Tenant-Id，M4 前临时方案）、租户会话、arq 队列依赖 |
+| `apps/api/src/rag_api/routes/documents.py` | 上传（multipart+财税元数据表单，格式/大小校验）、列表/单条进度查询、删除（软删记录+真删 chunks/Qdrant/MinIO） |
+| `packages/core/tests/test_chunking.py`、`apps/worker/tests/test_parsers.py` | 10 项单元测试 |
+
+**关键设计决策与修正**：
+- **修正了一个真实 bug（靠真实测试发现）**：原以为 arq 对异常自动重试 3 次，实测 arq 仅在显式抛 `Retry` 时重试——导致失败状态永远不回写、文档卡死。修正为任务级不重试（HTTP 层已有重试覆盖临时故障），任何异常直接回写 failed。**此前声明的"arq 重试 3 次"假设作废**
+- embedding 客户端放 core（M3 检索查询向量化复用）；解析器放 worker（唯一使用方）
+- 未配置 API Key 时显式报错"SILICONFLOW_API_KEY 未配置"，不静默跳过
 
 **设计决策（用户确认后冻结）**：公共政策库 v1 就建（is_public 标记）；应用层过滤 + PG RLS 双保险；文档软删除；角色两级 admin/member。
 
