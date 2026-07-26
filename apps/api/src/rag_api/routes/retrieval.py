@@ -4,18 +4,23 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from rag_core.db.models import Conversation, Message
 from rag_core.db.session import tenant_session
 
-from rag_api.deps import Db, TenantId
+from rag_api.auth import Principal, require_scope
+from rag_api.deps import Db, Queue
 from rag_api.llm import stream_answer
 from rag_api.prompts import build_system_prompt
+from rag_api.services import quota
 from rag_api.services import retrieval as svc
 
 router = APIRouter(prefix="/api/v1", tags=["retrieval"])
+
+RequireRetrievalScope = Depends(require_scope("retrieval"))
+RequireChatScope = Depends(require_scope("chat"))
 
 
 class RetrieveRequest(BaseModel):
@@ -36,10 +41,16 @@ class RetrieveResponse(BaseModel):
 
 
 @router.post("/retrieval")
-async def retrieve(req: RetrieveRequest, tenant_id: TenantId, db: Db) -> RetrieveResponse:
+async def retrieve(
+    req: RetrieveRequest,
+    db: Db,
+    queue: Queue,
+    principal: Principal = RequireRetrievalScope,
+) -> RetrieveResponse:
     """纯检索：返回带出处的相关片段（供小智等外部系统调用）。"""
+    await quota.check_and_incr_daily_requests(queue, db, principal.tenant_id)
     results, docs = await svc.search(
-        db, tenant_id, req.query, req.kb_ids, req.top_k, req.include_expired
+        db, principal.tenant_id, req.query, req.kb_ids, req.top_k, req.include_expired
     )
     return RetrieveResponse(
         results=[
@@ -82,11 +93,18 @@ async def _persist(
 
 
 @router.post("/chat")
-async def chat(req: ChatRequest, tenant_id: TenantId, db: Db) -> StreamingResponse:
+async def chat(
+    req: ChatRequest,
+    db: Db,
+    queue: Queue,
+    principal: Principal = RequireChatScope,
+) -> StreamingResponse:
     """RAG 问答：检索 → 生成带出处的回答，SSE 流式。
 
     事件序：citations（引用列表）→ 多个 token（增量文本）→ done。
     """
+    tenant_id = principal.tenant_id
+    await quota.check_and_incr_daily_requests(queue, db, tenant_id)
     results, docs = await svc.search(
         db, tenant_id, req.query, req.kb_ids, req.top_k, req.include_expired
     )

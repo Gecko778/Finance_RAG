@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     llm_model: str = "deepseek/deepseek-chat"
     deepseek_api_key: str = ""
 
+    # --- 认证与安全 ---
+    jwt_secret: str = "dev-insecure-change-in-production"  # 生产必须覆盖
+    jwt_expire_minutes: int = 720  # 前端登录令牌有效期（默认 12h）
+    api_key_prefix: str = "fr"  # API Key 明文前缀：fr_xxxxx
+
 
 @lru_cache
 def get_settings() -> Settings:

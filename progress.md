@@ -4,7 +4,31 @@
 
 ---
 
-## 2026-07-26 · M3 检索与生成 API ⏳（代码完成，端到端问答待有效 SiliconFlow + DeepSeek key 后补验）
+## 2026-07-26 · M4 多租户与权限 ✅
+
+**设计决策（用户确认后冻结）**：登录用 **租户标识(slug) + email + 密码**，不改 User 表结构（保留租户内 email 唯一）。
+
+**本次生成/改造的文件**：
+
+| 文件 | 作用 |
+|---|---|
+| `rag_core/security.py`（新） | 密码 bcrypt 哈希/校验；API Key 生成（fr_ 前缀）+ sha256 哈希 |
+| `rag_core/settings.py`（+认证段） | jwt_secret / jwt_expire_minutes / api_key_prefix |
+| `rag_core/db/session.py`（+admin_session、set_tenant） | 超级用户会话（登录前跨租户查找）；提取 set_tenant 供请求会话复用 |
+| `rag_api/auth.py`（新） | 双通道认证→统一 Principal：JWT（Authorization: Bearer）/ API Key（X-API-Key）；is_admin/has_scope；require_admin/require_user/require_scope 守卫 |
+| `rag_api/deps.py`（重写） | get_db 由 Principal 派生租户上下文（弃用 X-Tenant-Id）；**写操作显式提交模型**（见下） |
+| `rag_api/routes/auth.py`（新） | POST /auth/login：验证→签发 JWT，审计 auth.login |
+| `rag_api/routes/apikeys.py`（新） | API Key CRUD（仅管理员）：创建（明文仅返回一次）/列表（不含明文哈希）/吊销 |
+| `rag_api/services/audit.py`（新） | 审计日志 helper，登录/上传/删除/建吊销 key 均留痕 |
+| `rag_api/services/quota.py`（新） | 文档数+存储量配额（Postgres 实时统计，413）；日调用次数（Redis 计数，429） |
+| `rag_api/routes/documents.py`、`retrieval.py`（改造） | 用 Principal 替换 X-Tenant-Id；文档管理限用户；检索需 retrieval scope、问答需 chat scope；上传接配额、检索/问答接日配额；写操作审计 |
+| `scripts/m4_integration_check.py`（新） | 对真实 PG/Redis 的认证/授权集成验证脚本 |
+
+**关键设计决策与修正**：
+- **API Key 哈希用 sha256**（高熵随机串，无需慢哈希且每请求校验要快）；密码用 bcrypt（慢哈希抗爆破）
+- 登录跨租户查找用 admin_session（绕 RLS 的受控场景）；管理操作走租户会话（RLS 生效）
+- **修复真实读写竞态（靠 httpx 背靠背请求发现）**：原 `get_db` 在 `session.begin()` 里，提交发生在响应送达之后，导致"吊销 API Key 后立即复用"能在提交落库前的毫秒窗口内溜过（500 而非 401）。根因修复：**写路由在返回前显式 `await db.commit()`**（吊销/建 key/上传/删除），get_db 保留兜底提交/回滚。**顺带修掉 M2 隐患**：上传后 `enqueue` 改到提交之后，杜绝 worker 读到未提交文档。
+- API Key 只用于检索/问答（scopes: retrieval/chat）；文档管理限用户令牌（require_user）
 
 **设计决策（用户确认后冻结）**：检索策略 v1 = **稠密检索 + bge-reranker 重排 + 时效过滤**；关键词/混合检索延后到 M3.5（避免现在给 Postgres 加中文分词扩展或引入稀疏向量）。这是对 plan 原「混合检索」任务的有意收缩，已与用户确认。
 

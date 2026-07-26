@@ -1,35 +1,37 @@
-"""API 依赖：租户上下文 + 数据库会话 + arq 队列。
+"""API 依赖：租户会话（由认证 Principal 派生）+ arq 队列。
 
-⚠️ M2 临时方案：租户从 X-Tenant-Id 请求头读取（仅开发环境）。
-M4 将替换为 JWT / API Key 正式认证。
+M4 起租户上下文来自认证（JWT / API Key，见 auth.py），不再用 X-Tenant-Id 头。
 """
 
-import uuid
 from collections.abc import AsyncIterator
 from functools import lru_cache
 from typing import Annotated
 
 from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
-from fastapi import Depends, Header, HTTPException
-from rag_core.db.session import tenant_session
+from fastapi import Depends
+from rag_core.db.session import get_sessionmaker, set_tenant
 from rag_core.settings import get_settings
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
-async def get_tenant_id(x_tenant_id: Annotated[str, Header()]) -> uuid.UUID:
-    try:
-        return uuid.UUID(x_tenant_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="X-Tenant-Id 必须是 UUID") from None
+from rag_api.auth import CurrentPrincipal
 
 
-TenantId = Annotated[uuid.UUID, Depends(get_tenant_id)]
+async def get_db(principal: CurrentPrincipal) -> AsyncIterator[AsyncSession]:
+    """请求作用域会话：注入租户上下文。
 
-
-async def get_db(tenant_id: TenantId) -> AsyncIterator[AsyncSession]:
-    async with tenant_session(tenant_id) as session:
-        yield session
+    写操作应在处理器内显式 `await db.commit()`，以保证响应返回前落库
+    （避免"吊销后立即复用""上传后 worker 抢跑"等读写竞态）。
+    未显式提交的读操作由此处兜底提交/回滚。
+    """
+    async with get_sessionmaker()() as session:
+        await set_tenant(session, principal.tenant_id)
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
 
 
 Db = Annotated[AsyncSession, Depends(get_db)]

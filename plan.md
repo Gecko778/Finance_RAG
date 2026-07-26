@@ -186,16 +186,17 @@
 **目标**：安全隔离达到可给第二个租户使用的水平
 
 **任务**：
-- [ ] JWT 认证（前端用户）+ API Key 认证（机器调用）双通道
-- [ ] 租户上下文中间件：所有请求解析出 tenant_id，注入 repository 层强制过滤
-- [ ] RBAC：admin（租户管理/成员管理/删库）vs member（上传/问答）
-- [ ] 配额：文档数/存储量/日调用次数（tenants 表配额字段生效）
-- [ ] 审计日志中间件：登录、上传、删除、检索调用全留痕
-- [ ] API Key 管理 API：创建（明文仅显示一次）/吊销/scope
+- [x] JWT 认证（前端用户）+ API Key 认证（机器调用）双通道 → 统一 Principal
+- [x] 租户上下文：get_db 由 Principal 派生 tenant_id 注入 RLS（弃用 X-Tenant-Id）
+- [x] RBAC：admin（API Key 管理等）vs member（上传/问答）；API Key 仅 retrieval/chat scope、文档管理限用户
+- [x] 配额：文档数/存储量（Postgres 实时，413）/日调用次数（Redis，429）
+- [x] 审计日志：登录、上传、删除、建/吊销 key 留痕（record helper）
+- [x] API Key 管理 API：创建（明文仅显示一次）/列表（不含明文哈希）/吊销/scope
 
-**验收**：安全测试用例——租户 A 的 key 访问租户 B 的知识库返回 403/404；配额超限被拒；审计日志可查询到全部敏感操作
+**验收**：租户 A 令牌访问租户 B 数据被 RLS 隔离；配额超限被拒；scope/角色越权 403；吊销后复用 401 → **✅ 已通过（2026-07-26）：单元 37 + 集成 14 全过（test.md）**
 
 **风险**：无重大风险，属工程严谨性
+> ⚠️ 修复中发现并解决一处读写竞态（写操作提交时机），顺带修掉 M2 上传-enqueue 抢跑隐患，详见 progress.md。
 
 ---
 
@@ -295,6 +296,7 @@
 
 | 日期 | Milestone | 工作总结 | 测试结论 | Commit |
 |---|---|---|---|---|
+| 2026-07-26 | M4 | 多租户与权限：JWT+API Key 双认证、Principal、RBAC/scope、配额(文档/存储/日调用)、审计、API Key CRUD；修复吊销读写竞态 | 51 全过（单元 37 + 集成 14：登录/越权/RLS隔离/吊销复用/配额） | feat(M4) |
 | 2026-07-26 | M3 | 检索与生成 API：稠密检索+rerank+时效过滤、/retrieval（小智兼容）、/chat（SSE 流式带引用）、财税提示词、对话持久化；关键词混合收缩到 M3.5 | 6/7 通过（25 单测 + 路由装配 + 请求校验；问答端到端待 key） | feat(M3) |
 | 2026-07-23 | M2 | 摄取管线落地：上传 API（元数据表单+校验）、MinIO/Qdrant 客户端、条款切块策略、SiliconFlow 批量向量化、arq worker 状态机、删除级联清理 | 8/9 通过（单测 16、上传/MinIO/失败路径/删除级联实测；修复 arq 重试假设错误的真 bug）；ready 路径待 Key+真实文档补验 | feat(M2) |
 | 2026-07-23 | M1 | 数据库落地：9 表 schema（财税元数据+软删除+公共库）、Alembic 迁移、RLS 双保险（非超级用户角色+默认拒绝策略）、repository 层、种子、Qdrant collection | 11/11 通过（迁移可重放、repo/RLS 双层隔离、软删除、种子幂等、Qdrant 索引核验；1 处测试断言错误排查后修正） | feat(M1) |

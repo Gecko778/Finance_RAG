@@ -11,7 +11,9 @@ from rag_core.storage import delete_object, upload_bytes
 from rag_core.vectors import delete_by_doc
 from sqlalchemy import delete as sa_delete
 
-from rag_api.deps import Db, Queue, TenantId
+from rag_api.auth import UserPrincipal
+from rag_api.deps import Db, Queue
+from rag_api.services import audit, quota
 
 router = APIRouter(prefix="/api/v1", tags=["documents"])
 
@@ -47,7 +49,7 @@ class DocumentOut(BaseModel):
 async def upload_document(
     kb_id: uuid.UUID,
     file: UploadFile,
-    tenant_id: TenantId,
+    principal: UserPrincipal,
     db: Db,
     queue: Queue,
     doc_number: str = Form(""),
@@ -55,6 +57,7 @@ async def upload_document(
     expire_date: date | None = Form(None),
     source: str = Form(""),
 ) -> DocumentOut:
+    tenant_id = principal.tenant_id
     kb = await KnowledgeBaseRepo(db, tenant_id).get_own(kb_id)
     if kb is None:
         raise HTTPException(404, "知识库不存在或无权限")
@@ -67,6 +70,7 @@ async def upload_document(
     data = await file.read()
     if len(data) > MAX_SIZE:
         raise HTTPException(413, "文件超过 50MB 限制")
+    await quota.check_document_quota(db, tenant_id, len(data))
 
     doc = await DocumentRepo(db, tenant_id).create(
         kb,
@@ -78,39 +82,44 @@ async def upload_document(
         effective_date=effective_date,
         expire_date=expire_date,
         source=source,
+        created_by=principal.actor_id,
     )
     doc.minio_path = f"{tenant_id}/{doc.id}/{filename}"
     upload_bytes(doc.minio_path, data, doc.content_type)
+    audit.record(db, principal, "document.upload", "document", doc.id, {"filename": filename})
 
+    await db.commit()  # 先落库，worker 才能读到该文档（否则 enqueue 后可能抢跑）
     await queue.enqueue_job("ingest_document", str(tenant_id), str(doc.id))
     return DocumentOut.from_model(doc)
 
 
 @router.get("/kbs/{kb_id}/documents")
-async def list_documents(kb_id: uuid.UUID, tenant_id: TenantId, db: Db) -> list[DocumentOut]:
-    docs = await DocumentRepo(db, tenant_id).list_in_kb(kb_id)
+async def list_documents(kb_id: uuid.UUID, principal: UserPrincipal, db: Db) -> list[DocumentOut]:
+    docs = await DocumentRepo(db, principal.tenant_id).list_in_kb(kb_id)
     return [DocumentOut.from_model(d) for d in docs]
 
 
 @router.get("/documents/{doc_id}")
-async def get_document(doc_id: uuid.UUID, tenant_id: TenantId, db: Db) -> DocumentOut:
+async def get_document(doc_id: uuid.UUID, principal: UserPrincipal, db: Db) -> DocumentOut:
     doc = await db.get(Document, doc_id)
-    if doc is None or doc.deleted_at is not None or doc.tenant_id != tenant_id:
+    if doc is None or doc.deleted_at is not None or doc.tenant_id != principal.tenant_id:
         raise HTTPException(404, "文档不存在")
     return DocumentOut.from_model(doc)
 
 
 @router.delete("/documents/{doc_id}", status_code=204)
-async def delete_document(doc_id: uuid.UUID, tenant_id: TenantId, db: Db) -> None:
+async def delete_document(doc_id: uuid.UUID, principal: UserPrincipal, db: Db) -> None:
     """软删除业务记录；级联真删 chunks 行、Qdrant 向量、MinIO 文件。"""
-    repo = DocumentRepo(db, tenant_id)
+    tenant_id = principal.tenant_id
     doc = await db.get(Document, doc_id)
     if doc is None or doc.deleted_at is not None or doc.tenant_id != tenant_id:
         raise HTTPException(404, "文档不存在")
     minio_path = doc.minio_path
 
-    await repo.soft_delete(doc_id)
+    await DocumentRepo(db, tenant_id).soft_delete(doc_id)
     await db.execute(sa_delete(Chunk).where(Chunk.doc_id == doc_id))
     await delete_by_doc(doc_id)
     if minio_path:
         delete_object(minio_path)
+    audit.record(db, principal, "document.delete", "document", doc_id)
+    await db.commit()
