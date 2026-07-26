@@ -4,7 +4,21 @@
 
 ---
 
-## 2026-07-23 · M2 摄取管线（部分验收，ready 路径待补）
+## 2026-07-26 · M3 检索与生成 API（代码+纯逻辑验收；问答端到端待 key）
+
+| # | 测试项 | 执行命令 | 预期 | 实际 | 结论 |
+|---|---|---|---|---|---|
+| 1 | Lint | `uv run ruff check .` | 0 错误 | 修复 3 处（2 自动 + 1 docstring 换行）→ All checks passed | ✅ |
+| 2 | 时效过滤单测 | pytest `test_retrieval_service.py`（7 项） | 失效剔除/include_expired放开/null与未来保留/软删剔除/跨租户剔除/引用组装 | 全过 | ✅ |
+| 3 | 提示词单测 | pytest `test_prompts.py`（2 项） | 无资料返回拒答提示；有资料编号+财税规则在位 | 全过 | ✅ |
+| 4 | 全套回归 | `uv run pytest -q` | 全过 | `25 passed` | ✅ |
+| 5 | App 启动+路由注册 | TestClient 加载 app + 查 OpenAPI | /retrieval、/chat 均注册 | 两路由已注册，app 正常启动 | ✅ |
+| 6 | 请求校验 | 空 query / 缺租户头 POST | 均 422（不触外部 API） | 均返回 422 | ✅ |
+| 7 | **问答端到端** | 上传→ready→POST /chat 得带出处回答 | — | **待补**：依赖有效 SiliconFlow key（检索/rerank）+ DeepSeek key（生成）+ Qdrant 有向量（即 M2 ready 路径先通） | ⏳ 待补测 |
+
+**M2/M3 端到端阻塞点（同一根因）**：SiliconFlow key `sk-zux...dxxf` 被官方 embeddings 与 user/info 端点均判 `401 Token is invalid`（已直连验证，非代码问题）。M3 检索/rerank 用同一 key，生成还需 DeepSeek key。三者就绪后，M2 ready 路径与 M3 问答一并补测。
+
+**M3 验收结论**：检索/生成代码 + 纯逻辑（时效过滤、提示词、引用组装）+ 路由装配 6 项实测通过；**问答端到端待 key 后补验（#7）**。
 
 | # | 测试项 | 执行命令 | 预期 | 实际 | 结论 |
 |---|---|---|---|---|---|

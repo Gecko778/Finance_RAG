@@ -166,15 +166,18 @@
 **目标**：核心问答能力上线，引用可溯源
 
 **任务**：
-- [ ] 检索管线（packages/core）：Qdrant 稠密检索 + 关键词（BM25/全文）混合 → bge-reranker-v2-m3 重排 → **时效性过滤（expire_date 早于当前日期的政策默认剔除，可选参数放开）**
-- [ ] `POST /api/v1/retrieval`：纯检索端点，请求/响应形态兼容小智 `search_from_ragflow.py` 调用模式（Bearer API Key）
-- [ ] `POST /api/v1/chat`：RAG 问答，LiteLLM 调用 LLM，SSE 流式输出；回答附引用（文件名+文号+条款定位）；财税 system prompt（要求：仅依据检索内容回答、注明出处、不确定时明确说明、提示人工复核）
-- [ ] 对话历史存储（conversations/messages + citations）
-- [ ] 检索参数可配置（top_k、score 阈值、rerank 开关）
+- [x] 检索管线（packages/core）：Qdrant 稠密检索 + bge-reranker-v2-m3 重排 → **时效性过滤（expire_date 早于当前日期的政策默认剔除，`include_expired` 放开）**。关键词/混合检索经用户确认收缩到 M3.5（避免现在加中文分词/稀疏向量组件）
+- [x] `POST /api/v1/retrieval`：纯检索端点，返回带出处片段（供小智等调用；Bearer API Key 认证留待 M4）
+- [x] `POST /api/v1/chat`：RAG 问答，LiteLLM 调用 LLM，SSE 流式输出；回答附引用（文件名+文号+条款序号）；财税 system prompt（仅依据检索内容、注明出处、不确定明说、提示人工复核）
+- [x] 对话历史存储（conversations/messages + citations，流式结束后持久化）
+- [x] 检索参数可配置（top_k、include_expired；score 阈值/rerank 开关留待按需加）
+- [ ] **问答端到端验收**：待有效 SiliconFlow key（检索/rerank）+ DeepSeek key（生成）+ M2 ready 路径先通
 
-**验收**：curl 全链路——问一个有明确政策依据的问题，回答正确且引用指向正确文档条款；问一个知识库没有的问题，模型明确说"知识库中未找到依据"而非编造；已失效政策默认不被引用
+**验收**：curl 全链路——问一个有明确政策依据的问题，回答正确且引用指向正确文档条款；问知识库没有的问题模型明确说"知识库中未找到依据"；已失效政策默认不被引用 → **⏳ 部分通过（2026-07-26）：纯逻辑（时效过滤/提示词/引用组装）+ 路由装配 6 项实测通过；问答端到端待 key 后补验（test.md #7）**
 
-**风险**：幻觉与错引 → system prompt + 引用强制 + M6 评测集把关；检索质量不达标时调整切块/混合权重而非急于换模型
+**风险**：幻觉与错引 → system prompt + 引用强制 + M6 评测集把关；检索质量不达标时调整切块/rerank 而非急于换模型
+
+> 📌 **M3.5（延后项）**：关键词/混合检索。待 M3 稠密+rerank 基线质量在 M6 验证后，再决定是否加中文分词（Postgres zhparser）或稀疏向量。
 
 ---
 
@@ -292,6 +295,7 @@
 
 | 日期 | Milestone | 工作总结 | 测试结论 | Commit |
 |---|---|---|---|---|
+| 2026-07-26 | M3 | 检索与生成 API：稠密检索+rerank+时效过滤、/retrieval（小智兼容）、/chat（SSE 流式带引用）、财税提示词、对话持久化；关键词混合收缩到 M3.5 | 6/7 通过（25 单测 + 路由装配 + 请求校验；问答端到端待 key） | feat(M3) |
 | 2026-07-23 | M2 | 摄取管线落地：上传 API（元数据表单+校验）、MinIO/Qdrant 客户端、条款切块策略、SiliconFlow 批量向量化、arq worker 状态机、删除级联清理 | 8/9 通过（单测 16、上传/MinIO/失败路径/删除级联实测；修复 arq 重试假设错误的真 bug）；ready 路径待 Key+真实文档补验 | feat(M2) |
 | 2026-07-23 | M1 | 数据库落地：9 表 schema（财税元数据+软删除+公共库）、Alembic 迁移、RLS 双保险（非超级用户角色+默认拒绝策略）、repository 层、种子、Qdrant collection | 11/11 通过（迁移可重放、repo/RLS 双层隔离、软删除、种子幂等、Qdrant 索引核验；1 处测试断言错误排查后修正） | feat(M1) |
 | 2026-07-22 | M0 | 项目骨架落地：uv workspace（api/worker/core 三包）、docker-compose 四服务、pydantic-settings 配置、/healthz、ruff+pytest | 6/6 通过（lint、单测、四容器 healthy、healthz 端到端、配置加载） | feat(M0) |

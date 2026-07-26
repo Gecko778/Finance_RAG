@@ -8,6 +8,7 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "python-multipart>=0.0.12",
     "arq>=0.26",
+    "litellm>=1.55",
     "rag-core",
 ]
 

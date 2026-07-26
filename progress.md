@@ -4,7 +4,28 @@
 
 ---
 
-## 2026-07-23 · M2 摄取管线 ⏳（代码完成，端到端 ready 路径待 API Key + 真实文档后补验）
+## 2026-07-26 · M3 检索与生成 API ⏳（代码完成，端到端问答待有效 SiliconFlow + DeepSeek key 后补验）
+
+**设计决策（用户确认后冻结）**：检索策略 v1 = **稠密检索 + bge-reranker 重排 + 时效过滤**；关键词/混合检索延后到 M3.5（避免现在给 Postgres 加中文分词扩展或引入稀疏向量）。这是对 plan 原「混合检索」任务的有意收缩，已与用户确认。
+
+**本次生成的文件/模块**：
+
+| 文件 | 作用 |
+|---|---|
+| `packages/core/src/rag_core/vectors.py`（+search_chunks） | Qdrant 稠密检索：可见性过滤（本租户 OR 公共库，可选限定 kb）+ over-fetch 候选。**时效过滤刻意不放 Qdrant**，改由检索后用 Postgres 权威日期处理（避免 Qdrant 存日期字符串无法范围过滤的坑，也不改 M2 payload） |
+| `packages/core/src/rag_core/rerank.py` | SiliconFlow bge-reranker-v2-m3 重排客户端（429/5xx 退避重试） |
+| `packages/core/src/rag_core/retrieval.py` | 候选检索编排：问题向量化 + 稠密检索（纯逻辑，无 DB） |
+| `apps/api/src/rag_api/prompts.py` | 财税系统提示词：只依据检索资料、[序号]标注出处、不足则明说未找到、金额税率逐字引用、结尾提示人工复核 |
+| `apps/api/src/rag_api/llm.py` | LiteLLM 流式生成（默认 deepseek-chat，预留切本地） |
+| `apps/api/src/rag_api/services/retrieval.py` | 检索服务：候选→载入 Document 元数据→**时效/可见性过滤（filter_candidates 纯函数）**→rerank 取 top_k→引用组装 |
+| `apps/api/src/rag_api/routes/retrieval.py` | `/api/v1/retrieval`（纯检索，小智兼容）+ `/api/v1/chat`（SSE 流式：citations 事件→token 增量→done；结束后另开会话持久化对话+引用） |
+| `apps/api/tests/test_retrieval_service.py`、`test_prompts.py` | 9 项纯逻辑单测 |
+
+**关键设计决策**：
+- 时效过滤下沉到检索后 + Postgres 日期：M2 的 Qdrant payload 未改（surgical），失效政策用权威 DB 日期剔除，`include_expired` 可放开
+- 检索原语在 core（可复用），LLM/prompt/编排在 api（litellm 不进 core/worker，保持 core 轻量）
+- SSE 对话持久化在流式生成器内**另开** tenant_session（请求作用域会话此时已关闭）
+- 跨租户/软删文档在 filter_candidates 二次兜底剔除（防御式）
 
 **设计决策（用户确认后冻结）**：SiliconFlow Key 用户稍后填 .env；测试文档用户提供（放 `testdata/`）；解析器精简为 pypdf+python-docx（放弃 unstructured，表格差时走既定 MinerU 评估）。
 
