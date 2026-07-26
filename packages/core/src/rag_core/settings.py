@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 720  # 前端登录令牌有效期（默认 12h）
     api_key_prefix: str = "fr"  # API Key 明文前缀：fr_xxxxx
 
+    # --- 前端跨域（开发用 Vite dev server）---
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
 
 @lru_cache
 def get_settings() -> Settings:

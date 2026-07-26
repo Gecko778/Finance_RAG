@@ -4,7 +4,39 @@
 
 ---
 
-## 2026-07-26 · M4 多租户与权限 ✅
+## 2026-07-27 · M5 前端管理台（核心操作台）✅
+
+**设计决策（用户确认后冻结）**：范围=**核心操作台**（登录+知识库+文档+对话测试），成员/API Key/审计管理页归 M5.5；测试=**构建 + 浏览器渲染验证**（对话问答 E2E 与 M2/M3 一起等 key）。
+
+**后端补齐（前端所需，此前缺失）**：
+| 文件 | 作用 |
+|---|---|
+| `rag_api/routes/kbs.py`（新） | 知识库 GET 列表（本租户+公共）/POST 创建（同名 409）/DELETE 删除（管理员、非空 409、审计） |
+| `rag_api/routes/auth.py`（+/me） | GET /auth/me 校验令牌返回身份（前端刷新恢复会话） |
+| `rag_api/main.py`（+CORS） | CORSMiddleware 放行 Vite dev（localhost:5173）；注册 kbs 路由 |
+| `rag_core/settings.py`（+cors_origins） | 前端跨域来源配置 |
+| `pyproject.toml`（+exclude apps/web） | uv workspace 排除 Node 前端目录 |
+
+**前端（apps/web，Vue 3 + Element Plus + Vite + TS + Pinia + Vue Router）**：
+| 文件 | 作用 |
+|---|---|
+| `package.json`/`vite.config.ts`/`tsconfig.json`/`index.html`/`env.d.ts` | 工程配置 |
+| `src/main.ts`/`App.vue` | 入口，挂载 ElementPlus/Pinia/Router |
+| `src/api/client.ts` | axios 实例：请求注入 JWT、401 自动跳登录；localStorage 存 token |
+| `src/stores/auth.ts` | Pinia 认证 store：login/fetchMe/logout |
+| `src/router/index.ts` | 路由 + 守卫（未登录跳 /login） |
+| `src/layouts/MainLayout.vue` | 顶栏（角色/退出）+ 侧栏导航 |
+| `src/views/LoginView.vue` | 登录（租户 slug+邮箱+密码） |
+| `src/views/KnowledgeBasesView.vue` | 知识库列表/新建/删除；公共库无删除按钮（RBAC UI） |
+| `src/views/DocumentsView.vue` | 文档列表（状态标签+失败 tooltip）、上传（财税元数据表单）、删除、处理中轮询刷新 |
+| `src/views/ChatView.vue` | 对话：知识库多选、SSE 流式（fetch 解析 event/data）、引用出处卡片、人工复核提示 |
+| `Dockerfile`/`nginx.conf` | 多阶段构建 + nginx 托管（SPA 回退 + /api 反代，SSE 关缓冲）；供 M8 K8s |
+
+**关键点**：
+- SSE 用 fetch + ReadableStream 解析（EventSource 不支持 POST+Header）
+- 上传用原生 fetch 传 multipart（带 JWT）；文档处理中每 3s 轮询状态
+- uv workspace `apps/*` 会误吞 Node 前端，已 exclude
+- npm peer-dep 冲突（vite/plugin-vue 解析顺序）用 `--legacy-peer-deps` 解开
 
 **设计决策（用户确认后冻结）**：登录用 **租户标识(slug) + email + 密码**，不改 User 表结构（保留租户内 email 唯一）。
 

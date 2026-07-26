@@ -1,5 +1,6 @@
 [tool.uv.workspace]
 members = ["apps/*", "packages/*"]
+exclude = ["apps/web"]  # Node 前端，非 Python 成员
 
 [dependency-groups]
 dev = [

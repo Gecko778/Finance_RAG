@@ -7,7 +7,7 @@ from rag_core.db.session import admin_session
 from rag_core.security import verify_password
 from sqlalchemy import select
 
-from rag_api.auth import issue_jwt
+from rag_api.auth import CurrentPrincipal, issue_jwt
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -51,3 +51,19 @@ async def login(req: LoginRequest) -> LoginResponse:
             )
         )
         return LoginResponse(access_token=issue_jwt(tenant.id, user.id, user.role), role=user.role)
+
+
+class MeResponse(BaseModel):
+    tenant_id: str
+    user_id: str
+    role: str
+
+
+@router.get("/me")
+async def me(principal: CurrentPrincipal) -> MeResponse:
+    """校验当前令牌并返回身份（前端刷新后恢复会话用）。"""
+    return MeResponse(
+        tenant_id=str(principal.tenant_id),
+        user_id=str(principal.actor_id),
+        role=principal.role,
+    )
