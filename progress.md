@@ -4,7 +4,25 @@
 
 ---
 
-## 2026-07-27 · M6 评测基础设施 + 反馈渠道 ⏳（可测部分完成；真人内测 + RAGAS 跑分待 key/测试人员）
+## 2026-07-27 · M7 小智机器人集成 ⏳（插件+文档完成，语音端到端待 key+机器人）
+
+**本次生成的文件**（放本仓库 `integrations/xiaozhi/`，不改动机器人独立仓库）：
+
+| 文件 | 作用 |
+|---|---|
+| `integrations/xiaozhi/search_from_finance_rag.py` | 小智 function-call 插件：`@register_function` + POST `/api/v1/retrieval`（X-API-Key）+ `Action.REQLLM`；把 results 组织成带 `[序号] 来源` 的引用文本 |
+| `integrations/xiaozhi/README.md` | 安装步骤 + config.yaml 配置片段 + 端到端联调说明 |
+| `integrations/xiaozhi/test_plugin.py` | build_context 纯逻辑单测（stub 机器人依赖后导入真实插件文件） |
+
+**关键点（与 search_from_ragflow 的适配差异）**：
+- 响应结构按本项目形态 `{results:[{content,score,citation}]}` 解析（非 RAGFlow 的 `{code,data.chunks}`）
+- 认证用 `X-API-Key` 头（本项目 API Key 走此头；Bearer 会被当 JWT 解析失败——已实测印证）
+- 401/403/网络异常返回友好话术，不中断语音对话
+- 插件放本仓库版本化交付，安装=复制到机器人 functions 目录 + 配 config.yaml（不 commit 进机器人仓库）
+
+**契约验证（不依赖 key）**：用插件确切请求形态打真实 /retrieval——retrieval-key+payload 越过认证/scope/校验直达 embedding（500，仅因 key），缺 query 422，Bearer+apikey 401。证明插件契约正确，key 就绪即可用。
+
+**待 key+机器人**：语音问答端到端（需 SiliconFlow key + 灌库 + 小智 server 按 README 配置启动）。
 
 **说明**：M6 本质是"财税人员真实问答内测 + RAGAS 评分"，真人测试与跑分依赖 key + 测试人员，属自然汇合点。本次交付**不依赖 key 的基础设施**。
 

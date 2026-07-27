@@ -255,14 +255,14 @@
 **目标**：语音问财税问题，机器人从知识库取答案
 
 **任务**：
-- [ ] 在 `xiaozhi-esp32-server/main/xiaozhi-server/plugins_func/functions/` 新增 `search_from_finance_rag.py`（参考 `search_from_ragflow.py` 范式：`@register_function` + POST `/api/v1/retrieval` + Bearer API Key + `Action.REQLLM`）
-- [ ] `config.yaml` 增加 `plugins.search_from_finance_rag` 配置（base_url/api_key/kb_id），加入 `Intent.function_call` 函数列表
-- [ ] 为小智创建专用 API Key（限定 scope 为 retrieval）
-- [ ] 联调（参考 xiaoxin/AGENTS.md 的服务启动方式）
+- [x] 插件 `search_from_finance_rag.py`（放本仓库 `integrations/xiaozhi/`）：`@register_function` + POST `/api/v1/retrieval` + **X-API-Key**（非 Bearer，已实测印证）+ `Action.REQLLM`
+- [x] 安装文档 README（config.yaml 配置片段 + Intent.function_call 加入说明）+ 纯逻辑单测
+- [x] 插件↔平台 API 契约实测（认证头/请求形态/错误处理正确）
+- [ ] 为小智创建 retrieval API Key + config 配置 + 语音联调（**待 key + 机器人环境**）
 
-**验收**：对小智说"小规模纳税人免税额度是多少"，机器人基于知识库检索结果回答
+**验收**：对小智提财税问题，机器人基于知识库作答 → **⏳ 插件+契约就绪（2026-07-27，7 项通过）；语音端到端待 key+机器人（test.md #8）**
 
-**风险**：语音场景回答需短 → retrieval 端点支持 max_length/精简模式参数
+**风险**：语音场景回答需短 → retrieval 已支持 top_k 控制；如需更短可后续加精简模式参数
 
 ---
 
@@ -311,6 +311,7 @@
 
 | 日期 | Milestone | 工作总结 | 测试结论 | Commit |
 |---|---|---|---|---|
+| 2026-07-27 | M7 | 小智机器人集成插件 search_from_finance_rag.py（X-API-Key+/retrieval+REQLLM）+ 安装文档 + 纯逻辑单测 | 7 通过（build_context 单测 + 插件↔API 契约实测）；语音 E2E 待 key+机器人 | feat(M7) |
 | 2026-07-27 | M6 | 评测基础设施+反馈渠道：评测集(8例)+运行器+feedback 表/接口/前端按钮 | 10 通过（迁移回放/反馈链路/评测集加载）；真跑分/真人内测待 key | feat(M6) |
 | 2026-07-27 | M5.5 | 管理页：成员管理+API Key 管理+审计日志（后端路由+前端三页+管理员条件渲染） | 12 全过（后端 6：成员CRUD/停用即时生效/审计；前端 6：三页浏览器渲染+API Key 明文一次性展示） | feat(M5.5) |
 | 2026-07-27 | M5 | 前端核心操作台（Vue3+Element Plus）：登录/知识库/文档上传/对话页 + 补齐 KB 后端路由+CORS+前端 Dockerfile | 15 项 14 通过（构建+浏览器渲染真实登录/数据/RBAC UI+后端接口）；问答 E2E 待 key | feat(M5) |
