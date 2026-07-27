@@ -31,11 +31,25 @@ key 就绪（SiliconFlow .cn + DeepSeek）后一次性真实跑通。**以下取
 |---|---|---|---|---|
 | 1 | `kubectl kustomize k8s/` | 渲染成功、资源完整 | 渲染 **18 个资源**（Namespace/ConfigMap/Secret/4 数据服务 StatefulSet+Deployment/6 Service/api·worker·web Deployment/Job/Ingress） | ✅ |
 | 2 | api Dockerfile 含迁移工具 | alembic/scripts/alembic.ini 在镜像 | Dockerfile 已追加 COPY（alembic 在 core 依赖，非 dev） | ✅（结构） |
-| 3 | 完整 schema 校验 | — | `--dry-run=client` 需连集群下载 openapi（无集群拒绝）→ **待真集群** | ⏳ 需集群 |
-| 4 | 运行时部署验证 | pods 就绪 + /healthz | **待真集群**（kind 未装；本环境 ghcr 拉取不稳，未装 kind） | ⏳ 需集群 |
-| 5 | 合规/交付文档 | 数据流向+切本地路径+两形态+复核硬规 | docs/compliance-and-delivery.md 完成 | ✅ |
+| 3 | 合规/交付文档 | 数据流向+切本地路径+两形态+复核硬规 | docs/compliance-and-delivery.md 完成 | ✅ |
 
-**验证层级说明**：无集群时上限为 `kubectl kustomize` 结构校验（已通过，18 资源）。完整 schema 校验与运行时部署需连接真集群——可后续用 kind 起本地集群做端到端部署验证（Docker Hub 镜像拉取在本环境正常，app 镜像可 kind load）。
+### K8s 真集群运行时验证（2026-07-27，k3d）
+
+kind 节点镜像(~1GB via cloudfront)本环境 TLS 超时拉不下(3 次重试均失败)→ 改用 **k3d**(k3s 镜像小,拉取成功)起真集群验证：
+
+| # | 测试项 | 预期 | 实际 | 结论 |
+|---|---|---|---|---|
+| 4 | 集群创建 | 节点 Ready | k3d 集群 k8s v1.31 节点 Ready | ✅ |
+| 5 | 镜像导入 | 3 app 镜像入集群 | api/worker/web 导入成功 | ✅ |
+| 6 | 数据服务部署 | PG/Redis/Qdrant/MinIO Running | 4 个全部 Running（StatefulSet+PVC 生效） | ✅ |
+| 7 | migrate Job | alembic+seed+init_qdrant | Job Completed：2 迁移+chunks 集合(dim1024)+种子 admin | ✅ |
+| 8 | 应用部署 | api/worker/web 就绪 | 2×api+2×web+worker 全 Running；服务名解析(api→pg/redis/qdrant/minio)正常 | ✅ |
+| 9 | 集群内 /healthz | 200 | 200 | ✅ |
+| 10 | 集群内登录 | 拿 JWT | 成功 | ✅ |
+| 11 | 集群内上传→ready | worker 向量化 | 上传后 ready（集群 worker 调 SiliconFlow 成功） | ✅ |
+| 12 | **集群内 /chat 问答** | 带出处正确答案 | "季度销售额30万元[1]"引国家税务总局公告2026年第4号+复核提示 | ✅ |
+
+**结论**：K8s 清单**真集群运行时端到端验证通过**——整套 RAG（含 embedding/rerank/LLM 外呼、多服务编排、迁移种子、异步 worker）在 k8s 里真实跑通。验证后已删除测试集群释放资源。Ingress 未验证（k3s 默认 traefik，清单用 nginx class；已用 port-forward 绕过，生产需装对应 ingress 控制器）。
 
 ---
 
