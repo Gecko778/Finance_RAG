@@ -1,0 +1,148 @@
+# 应用层：迁移 Job + api + worker + web。镜像需先构建并推送到集群可拉取的 registry
+# （见 k8s/README.md）。此处用占位镜像名，imagePullPolicy IfNotPresent 便于本地 kind 载入。
+---
+# 一次性迁移 + 种子 + Qdrant 初始化（用 api 镜像，已含 alembic/scripts）
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  namespace: finance-rag
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: finance-rag-api:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - >
+              uv run --no-sync alembic upgrade head &&
+              uv run --no-sync python scripts/init_qdrant.py &&
+              uv run --no-sync python scripts/seed.py
+          envFrom:
+            - configMapRef: { name: finance-rag-config }
+            - secretRef: { name: finance-rag-secret }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: finance-rag
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: api }
+  template:
+    metadata:
+      labels: { app: api }
+    spec:
+      containers:
+        - name: api
+          image: finance-rag-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef: { name: finance-rag-config }
+            - secretRef: { name: finance-rag-secret }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: finance-rag
+spec:
+  selector: { app: api }
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: finance-rag
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: worker }
+  template:
+    metadata:
+      labels: { app: worker }
+    spec:
+      containers:
+        - name: worker
+          image: finance-rag-worker:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: finance-rag-config }
+            - secretRef: { name: finance-rag-secret }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: finance-rag
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: web }
+  template:
+    metadata:
+      labels: { app: web }
+    spec:
+      containers:
+        - name: web
+          image: finance-rag-web:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: finance-rag
+spec:
+  selector: { app: web }
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: finance-rag
+  namespace: finance-rag
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"      # SSE(/api/v1/chat) 需关缓冲
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: rag.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port: { number: 8000 }
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port: { number: 80 }

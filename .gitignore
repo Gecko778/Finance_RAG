@@ -31,3 +31,6 @@ apps/web/dist/
 # 本地测试文档（真实政策文件不入库）
 testdata/*
 !testdata/.gitkeep
+
+# K8s 真实密钥（仅提交 secret.example.yaml 模板）
+k8s/secret.yaml

@@ -25,6 +25,20 @@ key 就绪（SiliconFlow .cn + DeepSeek）后一次性真实跑通。**以下取
 
 ---
 
+## 2026-07-27 · M8 续：K8s 部署清单 + 合规文档
+
+| # | 测试项 | 预期 | 实际 | 结论 |
+|---|---|---|---|---|
+| 1 | `kubectl kustomize k8s/` | 渲染成功、资源完整 | 渲染 **18 个资源**（Namespace/ConfigMap/Secret/4 数据服务 StatefulSet+Deployment/6 Service/api·worker·web Deployment/Job/Ingress） | ✅ |
+| 2 | api Dockerfile 含迁移工具 | alembic/scripts/alembic.ini 在镜像 | Dockerfile 已追加 COPY（alembic 在 core 依赖，非 dev） | ✅（结构） |
+| 3 | 完整 schema 校验 | — | `--dry-run=client` 需连集群下载 openapi（无集群拒绝）→ **待真集群** | ⏳ 需集群 |
+| 4 | 运行时部署验证 | pods 就绪 + /healthz | **待真集群**（kind 未装；本环境 ghcr 拉取不稳，未装 kind） | ⏳ 需集群 |
+| 5 | 合规/交付文档 | 数据流向+切本地路径+两形态+复核硬规 | docs/compliance-and-delivery.md 完成 | ✅ |
+
+**验证层级说明**：无集群时上限为 `kubectl kustomize` 结构校验（已通过，18 资源）。完整 schema 校验与运行时部署需连接真集群——可后续用 kind 起本地集群做端到端部署验证（Docker Hub 镜像拉取在本环境正常，app 镜像可 kind load）。
+
+---
+
 ## 2026-07-27 · M8 部署基础设施：api/worker 容器化 ✅
 
 | # | 测试项 | 预期 | 实际 | 结论 |

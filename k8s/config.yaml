@@ -1,0 +1,24 @@
+# 非敏感配置。敏感项（密码/密钥/含密码的连接串）在 secret.yaml。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: finance-rag-config
+  namespace: finance-rag
+data:
+  # 集群内服务地址（Service 名）
+  REDIS_URL: "redis://redis:6379/0"
+  QDRANT_URL: "http://qdrant:6333"
+  MINIO_ENDPOINT: "minio:9000"
+  MINIO_BUCKET: "finance-rag-docs"
+  MINIO_SECURE: "false"
+  # 模型（SiliconFlow 中国站 + DeepSeek/LiteLLM）
+  SILICONFLOW_BASE_URL: "https://api.siliconflow.cn/v1"
+  EMBEDDING_MODEL: "BAAI/bge-m3"
+  EMBEDDING_DIM: "1024"
+  RERANK_MODEL: "BAAI/bge-reranker-v2-m3"
+  LLM_MODEL: "deepseek/deepseek-chat"
+  # postgres 初始化用（非敏感）
+  POSTGRES_USER: "finance_rag"
+  POSTGRES_DB: "finance_rag"
+  # 前端跨域：生产改为真实域名
+  CORS_ORIGINS: '["https://rag.example.com"]'

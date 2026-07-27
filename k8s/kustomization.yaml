@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# secret.yaml（真实密钥，gitignore）由使用者从 secret.example.yaml 复制填充；
+# 校验/演示时可临时用 secret.example.yaml。
+resources:
+  - namespace.yaml
+  - config.yaml
+  - secret.example.yaml
+  - data-services.yaml
+  - app.yaml

@@ -23,6 +23,29 @@
 
 ---
 
+## 2026-07-27 · M8 续：K8s 部署清单 + 合规/交付文档 ✅（两产品决策项仍延后）
+
+**本次生成的文件**：
+
+| 文件 | 作用 |
+|---|---|
+| `k8s/namespace.yaml`/`config.yaml`/`secret.example.yaml` | 命名空间、非敏感 ConfigMap、密钥模板（真实 secret.yaml 走 gitignore） |
+| `k8s/data-services.yaml` | PG/Qdrant/MinIO StatefulSet+PVC、Redis Deployment，各带 Service（生产可换托管） |
+| `k8s/app.yaml` | db-migrate Job（用 api 镜像跑 alembic+seed+init_qdrant）、api/worker/web Deployment、Service、Ingress（SSE 关缓冲） |
+| `k8s/kustomization.yaml`/`README.md` | kustomize 聚合 + 部署指南 + 加固 TODO |
+| `docs/compliance-and-delivery.md` | 数据流向表、合规提示（切本地模型路径）、两种交付形态、人工复核硬规 |
+| `apps/api/Dockerfile`（改） | 追加 alembic/scripts/alembic.ini，使 migrate-job 复用 api 镜像 |
+
+**关键点**：
+- 有状态服务集群内 StatefulSet 为默认（自包含、可 kind 验证），连接串在 secret 可外置托管
+- migrate-job 复用 api 镜像（alembic 在 core 依赖里，非 dev）
+- 应用角色密码耦合（M1 迁移写死 finance_rag_app_dev）已在 secret 模板注明 + 加固 TODO
+- 校验层级：`kubectl kustomize` 渲染 18 资源结构正确；完整 schema/运行时需真集群（kind 未装）
+
+**仍延后（产品决策，不臆想）**：租户公开自助注册、计费定价模型+用量计量。
+
+---
+
 ## 2026-07-27 · M8 部署基础设施：api/worker 容器化 ✅（M8 其余=产品决策，待沟通）
 
 **说明**：M8 SaaS 化整体是产品决策（计费/交付形态/自助开通/K8s 架构），plan 标注"另行详细规划"。本次只做**决策无关、任何部署都需要**的一块——api/worker 容器化（前端 M5 已有 Dockerfile）。
