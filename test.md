@@ -4,7 +4,18 @@
 
 ---
 
-## 2026-07-27 · M7 小智机器人集成（插件 ✅；语音 E2E 待 key+机器人）
+## 2026-07-27 · M8 部署基础设施：api/worker 容器化 ✅
+
+| # | 测试项 | 预期 | 实际 | 结论 |
+|---|---|---|---|---|
+| 1 | 构建 API 镜像 | docker build 成功 | `naming to finance-rag-api` 成功（uv 改 pip 后）| ✅ |
+| 2 | API 镜像内导入 | rag_api.main 可导入 | `rag_api import OK` | ✅ |
+| 3 | 构建 worker 镜像 | docker build 成功 | BUILD OK | ✅ |
+| 4 | worker 镜像内导入 | rag_worker.main 可导入 | `rag_worker import OK` | ✅ |
+
+**过程问题**：`COPY --from=ghcr.io/astral-sh/uv` 拉取失败（ghcr.io 短读 EOF，本环境网络不稳）→ 改 `pip install uv`，构建通过。
+
+**M8 结论**：api/worker/web 三镜像齐备并验证可构建/可导入。M8 其余（K8s 编排、计费、自助开通、交付形态）属产品/架构决策，待与负责人沟通后再规划实施。
 
 | # | 测试项 | 预期 | 实际 | 结论 |
 |---|---|---|---|---|

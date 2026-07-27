@@ -4,7 +4,23 @@
 
 ---
 
-## 2026-07-27 · M7 小智机器人集成 ⏳（插件+文档完成，语音端到端待 key+机器人）
+## 2026-07-27 · M8 部署基础设施：api/worker 容器化 ✅（M8 其余=产品决策，待沟通）
+
+**说明**：M8 SaaS 化整体是产品决策（计费/交付形态/自助开通/K8s 架构），plan 标注"另行详细规划"。本次只做**决策无关、任何部署都需要**的一块——api/worker 容器化（前端 M5 已有 Dockerfile）。
+
+**本次生成的文件**：
+
+| 文件 | 作用 |
+|---|---|
+| `apps/api/Dockerfile` | python:3.13-slim + uv，构建上下文=仓库根，`uv sync --package rag-api`，CMD uvicorn |
+| `apps/worker/Dockerfile` | 同上，`uv sync --package rag-worker`，CMD arq |
+
+**关键点**：
+- uv 改用 `pip install uv`（ghcr.io/astral-sh/uv 在本环境拉取不稳定，短读 EOF；pip 更稳）
+- 分层复制（先 pyproject 后源码）利用构建缓存
+- 三份镜像（api/worker/web）齐备，为 M8 K8s 编排就位
+
+**M8 待沟通的产品/架构决策**（不臆想）：K8s 部署架构（有状态服务 PG/Qdrant/MinIO/Redis 是集群内 StatefulSet 还是托管）、租户自助开通流程、用量计费模型、交付形态（多租户共享 vs 私有化包）、数据合规文档。
 
 **本次生成的文件**（放本仓库 `integrations/xiaozhi/`，不改动机器人独立仓库）：
 
