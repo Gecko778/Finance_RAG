@@ -1,19 +1,14 @@
-"""评测运行器（M6）：把 dataset.yaml 跑过 /api/v1/retrieval，做轻量自动判分 + 导出人工评审表。
+"""评测运行器（M6）：把 dataset.yaml 跑过 /api/v1/chat（真实端到端），判分并导出明细。
 
-判分（不依赖第三方评测库，先给基线）：
-- refusal 用例：检索结果为空 → 视为"应拒答且无误引"通过
-- 其余用例：must_cite 关键词命中任一检索片段的来源文件名 → 命中通过；
-  并检查 expects 要点是否出现在检索文本中（召回近似）
+判分（基于真实生成答案，而非仅检索层）：
+- refusal 用例：答案包含"未找到/没有找到/未涉及/无相关依据"等 → 正确拒答通过
+- 其余用例：答案命中 expects 要点关键词（按"，"切分，任一命中）→ 通过；
+  若指定 must_cite，则要求引用来源文件名含该关键词
 
-⚠️ 依赖有效 SiliconFlow key（检索需 embedding+rerank）与已灌库的 testdata 政策。
-    key/灌库就绪前本脚本无法产出真实分数——这是 M6 的 key 依赖部分。
+依赖有效 SiliconFlow key（检索/rerank）+ DeepSeek key（生成）+ 已灌库。
 
 用法：
-  先登录拿 token 或用 API Key；起 API；灌入 testdata 三份政策到某知识库；然后：
   uv run python scripts/eval/run_eval.py --base http://localhost:8000 --token <JWT> [--kb <kb_id>]
-
-RAGAS 升级：拿到基线后可接入 ragas（faithfulness/answer_relevancy/context_precision），
-    需额外装 `ragas` 并配置评审 LLM；此处先用关键词命中作为可离线复核的基线。
 """
 
 import argparse
@@ -25,39 +20,56 @@ import httpx
 import yaml
 
 DATASET = Path(__file__).with_name("dataset.yaml")
+REFUSAL_MARKERS = ("未找到", "没有找到", "未涉及", "无相关", "未包含", "无法回答")
 
 
 def load_cases() -> list[dict]:
     return yaml.safe_load(DATASET.read_text(encoding="utf-8"))["cases"]
 
 
+def _chat(client: httpx.Client, token: str, query: str, kb: str | None) -> tuple[str, list[dict]]:
+    """调用 /chat SSE，返回 (答案文本, 引用列表)。"""
+    payload: dict = {"query": query, "top_k": 5}
+    if kb:
+        payload["kb_ids"] = [kb]
+    answer, citations = "", []
+    with client.stream(
+        "POST", "/api/v1/chat", headers={"Authorization": f"Bearer {token}"}, json=payload
+    ) as resp:
+        resp.raise_for_status()
+        event = ""
+        for line in resp.iter_lines():
+            if line.startswith("event:"):
+                event = line[6:].strip()
+            elif line.startswith("data:"):
+                data = json.loads(line[5:].strip())
+                if event == "citations":
+                    citations = data.get("citations", [])
+                elif event == "token":
+                    answer += data.get("text", "")
+    return answer, citations
+
+
 def run(base: str, token: str, kb: str | None) -> int:
     cases = load_cases()
-    headers = {"Authorization": f"Bearer {token}"}
-    results = []
-    passed = 0
-    with httpx.Client(base_url=base, timeout=60) as c:
+    results, passed = [], 0
+    with httpx.Client(base_url=base, timeout=120) as c:
         for case in cases:
-            payload = {"query": case["query"], "top_k": 5}
-            if kb:
-                payload["kb_ids"] = [kb]
-            r = c.post("/api/v1/retrieval", headers=headers, json=payload)
-            r.raise_for_status()
-            hits = r.json()["results"]
-            texts = " ".join(h["content"] for h in hits)
-            sources = " ".join(h["citation"]["filename"] for h in hits)
+            answer, citations = _chat(c, token, case["query"], kb)
+            sources = " ".join(x.get("filename", "") for x in citations)
+            refused = any(m in answer for m in REFUSAL_MARKERS)
 
             if case["should_refuse"]:
-                ok = len(hits) == 0
-                reason = "无检索结果(应拒答)" if ok else f"不应有结果却命中 {len(hits)} 条"
+                ok = refused
+                reason = "正确拒答" if ok else "未拒答（应拒答却作答）"
             else:
+                recall = any(k in answer for k in str(case["expects"]).split("，"))
                 cite_ok = (not case["must_cite"]) or (case["must_cite"] in sources)
-                recall_ok = any(k in texts for k in str(case["expects"]).split("，"))
-                ok = cite_ok and recall_ok
-                reason = f"引用命中={cite_ok} 要点召回={recall_ok}"
+                ok = recall and cite_ok and not refused
+                reason = f"要点命中={recall} 引用={cite_ok} 误拒答={refused}"
 
             passed += ok
-            results.append({**case, "hits": len(hits), "pass": ok, "reason": reason})
+            results.append({**case, "answer": answer, "pass": ok, "reason": reason})
             print(f"[{'PASS' if ok else 'FAIL'}] {case['id']} {case['category']}: {reason}")
 
     out = Path(__file__).with_name("eval_result.json")
