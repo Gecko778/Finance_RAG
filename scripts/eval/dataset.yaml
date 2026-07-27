@@ -1,0 +1,68 @@
+# 财税 RAG 评测集（M6）
+# 基于 testdata 中的真实政策：增值税法、增值税法实施条例征求意见稿、起征点公告2026年第4号。
+# 用于 RAGAS 基线与人工评审。灌库后运行 scripts/eval/run_ragas.py。
+#
+# 每条：
+#   id           用例编号
+#   category     factual(事实查询) / cross_article(跨条款) / freshness(时效性) / refusal(拒答)
+#   query        问题
+#   expects      期望回答要点（人工评审锚点；RAGAS 用作 ground truth 参考）
+#   must_cite    期望命中的来源文档关键词（可空）
+#   should_refuse是否应拒答（知识库无依据时）
+
+cases:
+  - id: F1
+    category: factual
+    query: 小规模纳税人以一个季度为计税期间的增值税起征点是多少？
+    expects: 季度销售额30万元
+    must_cite: 起征点
+    should_refuse: false
+
+  - id: F2
+    category: factual
+    query: 小规模纳税人按次纳税的增值税起征点是多少？
+    expects: 每次（日）销售额1000元
+    must_cite: 起征点
+    should_refuse: false
+
+  - id: F3
+    category: factual
+    query: 增值税法自何时起施行？
+    expects: 2026年1月1日
+    must_cite: 增值税法
+    should_refuse: false
+
+  - id: C1
+    category: cross_article
+    query: 自然人出租不动产一次性收取租金的，如何确定月销售额以适用起征点？
+    expects: 以对应租赁期月均分摊的租金确定月销售额，适用以一个月为计税期间的起征点
+    must_cite: 起征点
+    should_refuse: false
+
+  - id: C2
+    category: cross_article
+    query: 小规模纳税人销售额未达起征点，能否放弃免税并开具增值税专用发票？
+    expects: 可以选择全部或部分应税交易放弃免税并开具增值税专用发票
+    must_cite: 起征点
+    should_refuse: false
+
+  - id: R1
+    category: refusal
+    query: 个人所得税专项附加扣除中子女教育的扣除标准是多少？
+    expects: 知识库中未找到相关依据（当前库内仅增值税相关政策）
+    must_cite: ""
+    should_refuse: true
+
+  - id: R2
+    category: refusal
+    query: 企业所得税的税率是多少？
+    expects: 知识库中未找到相关依据（当前库内无企业所得税政策）
+    must_cite: ""
+    should_refuse: true
+
+  - id: T1
+    category: freshness
+    query: 增值税小规模纳税人减免政策的最新征管规定废止了哪个旧文件？
+    expects: 废止《国家税务总局关于增值税小规模纳税人减免增值税等政策有关征管事项的公告》(2023年第1号)
+    must_cite: 起征点
+    should_refuse: false

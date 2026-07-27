@@ -4,7 +4,25 @@
 
 ---
 
-## 2026-07-27 · M5.5 管理页（成员/API Key/审计）✅
+## 2026-07-27 · M6 评测基础设施 + 反馈渠道 ⏳（可测部分完成；真人内测 + RAGAS 跑分待 key/测试人员）
+
+**说明**：M6 本质是"财税人员真实问答内测 + RAGAS 评分"，真人测试与跑分依赖 key + 测试人员，属自然汇合点。本次交付**不依赖 key 的基础设施**。
+
+**本次生成的文件**：
+
+| 文件 | 作用 |
+|---|---|
+| `rag_core/db/models.py`（+Feedback） | 反馈模型：rating(up/down)+query/answer/comment，租户隔离 |
+| `alembic/versions/a1b2c3d4e5f6_add_feedback.py`（新） | feedback 表迁移：新表授权 finance_rag_app + RLS 租户策略（可 down/up 回放） |
+| `rag_api/routes/feedback.py`（新） | POST 提交（用户，rating 正则校验）/ GET 查看（管理员，rating 过滤） |
+| `scripts/eval/dataset.yaml`（新） | 评测集 8 例：factual3/cross_article2/refusal2/freshness1，基于 testdata 真实政策 |
+| `scripts/eval/run_eval.py`（新） | 评测运行器：跑 dataset 过 /retrieval 轻量判分（引用命中+要点召回+拒答），导出明细 |
+| `apps/web/src/views/ChatView.vue`（改） | 回答区加"有帮助/不准确"反馈按钮 → POST /feedback |
+
+**关键点**：
+- feedback 为新增表（不改 M1 冻结的核心表），迁移中单独 GRANT + RLS，已验证 down/up 回放
+- 评测运行器不引第三方评测库，先用"引用命中+要点召回"给可离线复核的基线；RAGAS 升级位已注明
+- **待 key/测试人员**：run_eval.py 真实跑分（需检索可用=key+灌库）、财税人员真人内测、RAGAS 指标、前端反馈按钮 E2E（需真实回答可评）
 
 **本次生成的文件**：
 

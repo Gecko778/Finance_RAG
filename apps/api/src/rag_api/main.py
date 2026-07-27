@@ -6,6 +6,7 @@ from rag_api.routes.apikeys import router as apikeys_router
 from rag_api.routes.audit_log import router as audit_router
 from rag_api.routes.auth import router as auth_router
 from rag_api.routes.documents import router as documents_router
+from rag_api.routes.feedback import router as feedback_router
 from rag_api.routes.kbs import router as kbs_router
 from rag_api.routes.members import router as members_router
 from rag_api.routes.retrieval import router as retrieval_router
@@ -27,6 +28,7 @@ app.include_router(audit_router)
 app.include_router(kbs_router)
 app.include_router(documents_router)
 app.include_router(retrieval_router)
+app.include_router(feedback_router)
 
 
 @app.get("/healthz")

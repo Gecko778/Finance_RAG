@@ -22,6 +22,8 @@ const query = ref("");
 const answer = ref("");
 const citations = ref<Citation[]>([]);
 const streaming = ref(false);
+const lastQuery = ref("");
+const feedbackSent = ref(false);
 
 onMounted(async () => {
   kbs.value = (await api.get("/api/v1/kbs")).data;
@@ -35,6 +37,8 @@ async function send() {
   answer.value = "";
   citations.value = [];
   streaming.value = true;
+  feedbackSent.value = false;
+  lastQuery.value = query.value;
   try {
     const resp = await fetch(`${API_BASE}/api/v1/chat`, {
       method: "POST",
@@ -53,6 +57,20 @@ async function send() {
     ElMessage.error(e.message ?? "对话失败");
   } finally {
     streaming.value = false;
+  }
+}
+
+async function sendFeedback(rating: "up" | "down") {
+  try {
+    await api.post("/api/v1/feedback", {
+      query: lastQuery.value,
+      answer: answer.value,
+      rating,
+    });
+    feedbackSent.value = true;
+    ElMessage.success("感谢反馈");
+  } catch {
+    ElMessage.error("反馈提交失败");
   }
 }
 
@@ -108,7 +126,22 @@ async function consumeSSE(body: ReadableStream<Uint8Array>) {
   </el-form>
 
   <el-card v-if="answer || streaming" style="margin-top: 16px">
-    <template #header>回答</template>
+    <template #header>
+      <div class="answer-head">
+        <span>回答</span>
+        <div v-if="answer && !streaming" class="fb">
+          <template v-if="!feedbackSent">
+            <el-button link @click="sendFeedback('up')">
+              <el-icon><CircleCheck /></el-icon>&nbsp;有帮助
+            </el-button>
+            <el-button link type="danger" @click="sendFeedback('down')">
+              <el-icon><CircleClose /></el-icon>&nbsp;不准确
+            </el-button>
+          </template>
+          <el-tag v-else size="small" type="info">反馈已提交</el-tag>
+        </div>
+      </div>
+    </template>
     <div class="answer">{{ answer }}<span v-if="streaming" class="cursor">▍</span></div>
   </el-card>
 
@@ -134,6 +167,15 @@ async function consumeSSE(body: ReadableStream<Uint8Array>) {
 .answer {
   white-space: pre-wrap;
   line-height: 1.7;
+}
+.answer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.fb {
+  display: flex;
+  gap: 4px;
 }
 .cursor {
   animation: blink 1s step-end infinite;

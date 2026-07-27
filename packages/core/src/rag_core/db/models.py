@@ -31,6 +31,7 @@ TENANT_STATUSES = ("active", "suspended")
 USER_ROLES = ("admin", "member")
 DOCUMENT_STATUSES = ("uploaded", "parsing", "chunking", "embedding", "ready", "failed")
 MESSAGE_ROLES = ("user", "assistant", "system")
+FEEDBACK_RATINGS = ("up", "down")
 
 
 class Tenant(UUIDPkMixin, TimestampMixin, Base):
@@ -146,6 +147,23 @@ class Message(UUIDPkMixin, TimestampMixin, Base):
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
     citations: Mapped[list] = mapped_column(JSONB, default=list)
+
+
+class Feedback(UUIDPkMixin, TimestampMixin, Base):
+    """内测反馈：对一次问答的评价（好评/差评 + 备注），用于 badcase 收集与迭代。"""
+
+    __tablename__ = "feedback"
+    __table_args__ = (
+        CheckConstraint(f"rating IN {FEEDBACK_RATINGS}", name="ck_feedback_rating"),
+        Index("ix_feedback_tenant_created", "tenant_id", "created_at"),
+    )
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid, default=None)
+    query: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text, default="")
+    rating: Mapped[str] = mapped_column(String(8))
+    comment: Mapped[str] = mapped_column(Text, default="")
 
 
 class AuditLog(UUIDPkMixin, Base):
