@@ -7,7 +7,12 @@ const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
 
-const activeMenu = computed(() => (route.path.startsWith("/chat") ? "/chat" : "/kbs"));
+const ADMIN_PATHS = ["/members", "/apikeys", "/audit"];
+const activeMenu = computed(() => {
+  const match = ["/chat", ...ADMIN_PATHS].find((p) => route.path.startsWith(p));
+  return match ?? "/kbs";
+});
+const isAdmin = computed(() => auth.role === "admin");
 
 onMounted(() => {
   auth.fetchMe().catch(() => {});
@@ -37,6 +42,17 @@ function logout() {
           <el-menu-item index="/chat">
             <el-icon><ChatDotRound /></el-icon><span>对话测试</span>
           </el-menu-item>
+          <template v-if="isAdmin">
+            <el-menu-item index="/members">
+              <el-icon><User /></el-icon><span>成员管理</span>
+            </el-menu-item>
+            <el-menu-item index="/apikeys">
+              <el-icon><Key /></el-icon><span>API Key</span>
+            </el-menu-item>
+            <el-menu-item index="/audit">
+              <el-icon><Document /></el-icon><span>审计日志</span>
+            </el-menu-item>
+          </template>
         </el-menu>
       </el-aside>
       <el-main>

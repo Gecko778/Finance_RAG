@@ -4,7 +4,24 @@
 
 ---
 
-## 2026-07-27 · M5 前端管理台（核心操作台）✅
+## 2026-07-27 · M5.5 管理页（成员/API Key/审计）✅
+
+**本次生成的文件**：
+
+| 文件 | 作用 |
+|---|---|
+| `rag_api/routes/members.py`（新） | 成员管理（仅管理员）：列表/创建（bcrypt 密码、邮箱租户内唯一 409）/启用停用（禁停用自己） |
+| `rag_api/routes/audit_log.py`（新） | 审计日志查询（仅管理员）：时间倒序、可按 action 过滤、limit 1-200 |
+| `rag_api/main.py`（+2 路由） | 注册 members / audit |
+| `apps/web/src/views/MembersView.vue`（新） | 成员表格 + 新建对话框 + 启用/停用切换 |
+| `apps/web/src/views/ApiKeysView.vue`（新） | API Key 表格 + 新建（明文一次性绿条展示）+ 吊销 |
+| `apps/web/src/views/AuditView.vue`（新） | 审计日志只读表格 + action 过滤 |
+| `apps/web/src/router/index.ts`、`layouts/MainLayout.vue`（改） | 加 /members /apikeys /audit 路由；侧栏管理员三项（isAdmin 条件渲染） |
+
+**关键点**：
+- 管理页仅管理员可见（前端 isAdmin 条件渲染 + 后端 AdminPrincipal 双重把关）
+- API Key 创建明文仅一次性返回并在前端绿色提示条展示
+- 停用成员即时生效（登录校验 is_active，实测停用后登录 401）
 
 **设计决策（用户确认后冻结）**：范围=**核心操作台**（登录+知识库+文档+对话测试），成员/API Key/审计管理页归 M5.5；测试=**构建 + 浏览器渲染验证**（对话问答 E2E 与 M2/M3 一起等 key）。
 
